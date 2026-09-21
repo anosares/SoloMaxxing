@@ -343,6 +343,9 @@
       scheduleForm: null, // local editable copy
       profileForm: null,  // local editable copy
       weightInput: "",
+      setsDone: {},               // NEW: which sets you've tapped today, e.g. { "squat-0": true }
+      restTimer: null,            // NEW: { key, endsAt } while a rest countdown is running
+      trainingCompleteEvent: false, // NEW: shows the "training complete" popup
     };
 
     function todayISO() {
@@ -469,6 +472,74 @@
       state.weightInput = "";
       await fetchAll();
     }
+
+    // ============================================================
+    // NEW — REST TIMER: tap a set when you finish it, then it counts down your rest
+    // ============================================================
+    const REST_SECONDS = 60; // <- change this to make the rest longer/shorter
+    let restInterval = null;
+    let restAudio = null;
+
+    const setKey = (slot, i) => `${slot}-${i}`;
+    const fmtRest = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+    function restRemaining() {
+      if (!state.restTimer) return 0;
+      return Math.max(0, Math.ceil((state.restTimer.endsAt - Date.now()) / 1000));
+    }
+
+    function unlockRestAudio() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!restAudio) restAudio = new AC();
+        if (restAudio.state === "suspended") restAudio.resume();
+      } catch (e) { /* audio is optional */ }
+    }
+
+    function restAlert() {
+      try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { }
+      try {
+        if (!restAudio) return;
+        const osc = restAudio.createOscillator();
+        const gain = restAudio.createGain();
+        osc.type = "sine";
+        osc.frequency.value = 880;
+        gain.gain.value = 0.08;
+        osc.connect(gain);
+        gain.connect(restAudio.destination);
+        osc.start();
+        osc.stop(restAudio.currentTime + 0.35);
+      } catch (e) { /* audio is optional */ }
+    }
+
+    function stopRest() {
+      if (restInterval) clearInterval(restInterval);
+      restInterval = null;
+      state.restTimer = null;
+    }
+
+    function tickRest() {
+      if (!state.restTimer) { stopRest(); return; }
+      const left = restRemaining();
+      if (left <= 0) { stopRest(); restAlert(); render(); return; }
+      // update only the countdown text (no full re-render every second)
+      document.querySelectorAll("[data-rest-label]").forEach((el) => {
+        if (el.dataset.restLabel === state.restTimer.key) el.textContent = fmtRest(left);
+      });
+    }
+
+    function startRest(key) {
+      state.setsDone[key] = true;
+      state.restTimer = { key, endsAt: Date.now() + REST_SECONDS * 1000 };
+      unlockRestAudio();
+      if (restInterval) clearInterval(restInterval);
+      restInterval = setInterval(tickRest, 250);
+      render();
+    }
+
+    // if the phone was locked / tab in background, catch up as soon as you come back
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) tickRest(); });
 
     // ============================================================
     // 5. DERIVED STATE
@@ -635,6 +706,95 @@
       </span>`;
     }
 
+    // ---------- NEW: SET BUTTONS WITH REST COUNTDOWN ----------
+    function renderSetChips(ex, d) {
+      const chips = Array.from({ length: ex.sets }, (_, i) => {
+        const key = setKey(ex.slot, i);
+        const resting = state.restTimer?.key === key;
+        const done = !resting && (d.trainingDone || Boolean(state.setsDone[key]));
+        const cls = resting
+          ? "border-gold bg-gold/10 text-gold"
+          : done
+            ? "border-cyan/60 bg-cyan/5 text-cyan"
+            : "border-line bg-panel-raised text-ink-dim active:bg-cyan/10";
+        const label = resting
+          ? `<span data-rest-label="${key}">${fmtRest(restRemaining())}</span>`
+          : done ? `✓ SET ${i + 1}` : `SET ${i + 1}`;
+        return `<button data-action="start-rest" data-key="${key}" ${d.trainingDone ? "disabled" : ""}
+          class="flex-1 min-w-[56px] py-1.5 border font-display text-[10px] tracking-wide ${cls}">${label}</button>`;
+      }).join("");
+      return `<div class="flex flex-wrap gap-1.5 mt-1.5">${chips}</div>`;
+    }
+
+    // ---------- NEW: "TRAINING COMPLETE" MESSAGE + TOMORROW'S WORKOUT ----------
+    function getNextWorkout(d) {
+      if (!state.schedule.length || !d.trainingDays.length) return null;
+      const todayDow = dayOfWeek(DATE);
+      for (let offset = 1; offset <= 7; offset++) {
+        const dow = (todayDow + offset) % 7;
+        const entry = state.schedule.find((s) => s.day_of_week === dow);
+        if (!entry?.is_training_day) continue;
+        const idx = d.trainingDays.findIndex((s) => s.day_of_week === dow);
+        if (idx === -1) continue;
+        const day = BASE_SPLIT[idx % BASE_SPLIT.length];
+        const label = DAYS_UI.find((x) => x.dow === dow)?.label || "";
+        return { offset, label, workout: buildWorkoutForDay(day.id, d.rank) };
+      }
+      return null;
+    }
+
+    function trainingCompleteMessage(d) {
+      const who = state.profile?.name || "Hunter";
+      const name = d.todaysWorkout?.name;
+      return `Quest cleared, ${who}! You finished today's training${name ? `: <span class="text-ink">${name}</span>` : ""}. Rest up and refuel.`;
+    }
+
+    function renderNextWorkoutInner(d) {
+      const next = getNextWorkout(d);
+      if (!next) {
+        return `<p class="text-ink-dim text-sm font-body">No upcoming training days are scheduled. Pick your training days in the Schedule tab.</p>`;
+      }
+      const isTomorrow = next.offset === 1;
+      return `
+        ${isTomorrow ? "" : `<p class="text-ink-dim text-sm font-body mb-3">Tomorrow is a Recovery Zone. Your next workout is on ${next.label}.</p>`}
+        <p class="text-cyan text-[11px] tracking-[0.2em] font-body">${isTomorrow ? "TOMORROW'S WORKOUT" : `NEXT WORKOUT · ${next.label.toUpperCase()}`}</p>
+        <p class="font-display text-base text-ink mt-1">${next.workout.name}</p>
+        <ul class="mt-2 space-y-1">
+          ${next.workout.exercises.map((ex) => `
+          <li class="flex items-center justify-between gap-3 text-sm font-body">
+            <span class="text-ink">${ex.name}</span>
+            <span class="text-ink-faint text-xs shrink-0">${ex.sets} × ${ex.reps}</span>
+          </li>`).join("")}
+        </ul>`;
+    }
+
+    // permanent card inside the Quest Log once today's training is done
+    function renderNextWorkoutPanel(d) {
+      return `
+        <div class="panel px-4 py-4 mb-4">
+          <span class="text-[10px] font-body px-2 py-0.5 border border-purple text-purple">TRAINING COMPLETE</span>
+          <p class="text-ink-dim text-sm font-body mt-3 leading-relaxed">${trainingCompleteMessage(d)}</p>
+          <div class="mt-4 border-t border-line pt-3">${renderNextWorkoutInner(d)}</div>
+        </div>`;
+    }
+
+    // popup that appears right after you tap COMPLETE TRAINING QUEST
+    function renderTrainingCompleteModal(d) {
+      if (!state.trainingCompleteEvent || state.rankUpEvent) return ""; // shows after the rank-up popup, if any
+      return `
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-void/90 backdrop-blur-sm px-6 py-6">
+        <div class="panel shadow-glow-gold px-5 py-6 max-w-sm w-full max-h-full overflow-y-auto animate-fadeIn">
+          <div class="text-center">
+            <p class="text-gold text-xs tracking-[0.3em] font-body mb-2">SYSTEM NOTIFICATION</p>
+            <h2 class="font-display text-2xl text-ink mb-3">TRAINING COMPLETE</h2>
+            <p class="text-ink-dim font-body text-sm leading-relaxed">${trainingCompleteMessage(d)}</p>
+          </div>
+          <div class="mt-5 border-t border-line pt-4">${renderNextWorkoutInner(d)}</div>
+          <button data-action="close-training-complete" class="mt-5 w-full py-3 bg-gold/10 border border-gold text-gold font-display text-sm tracking-wide active:bg-gold/20">CONTINUE</button>
+        </div>
+      </div>`;
+    }
+
     function renderQuests(d) {
       const dailyReward = d.isTrainingDay ? EXP_REWARDS.dailyQuest : EXP_REWARDS.restDayQuest;
       const allExChecked = d.todaysWorkout && d.todaysWorkout.exercises.every((e) => state.checkedExercises[e.slot]);
@@ -665,14 +825,17 @@
                     <span class="block text-ink-faint text-xs font-body">${ex.sets} sets × ${ex.reps}</span>
                   </span>
                 </button>
+                ${renderSetChips(ex, d)}
               </li>`;
       }).join("")}
           </ul>
+          ${d.trainingDone ? "" : `<p class="text-ink-faint text-[11px] font-body mt-3">Tap a set when you finish it to start a ${REST_SECONDS}s rest countdown.</p>`}
           <button data-action="complete-training" ${(!allExChecked || d.trainingDone) ? "disabled" : ""}
             class="mt-4 w-full py-3 font-display text-xs tracking-wide border ${d.trainingDone ? "border-line text-ink-faint" : allExChecked ? "border-gold text-gold bg-gold/10 active:bg-gold/20" : "border-line text-ink-faint"}">
             ${d.trainingDone ? "QUEST COMPLETE" : "COMPLETE TRAINING QUEST"}
           </button>
-        </div>` : `
+        </div>
+        ${d.trainingDone ? renderNextWorkoutPanel(d) : ""}` : `
         <div class="panel px-4 py-4 mb-4">
           <p class="font-display text-ink text-base">No training quest today.</p>
           <p class="text-ink-dim text-sm font-body mt-1">Recovery is part of the grind — light quests only.</p>
@@ -932,6 +1095,7 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
         <div class="min-h-screen bg-void">
           ${renderToast()}
           ${renderRankUpModal()}
+          ${renderTrainingCompleteModal(d)}
           ${screen}
           ${renderBottomNav()}
         </div>`;
@@ -957,7 +1121,18 @@ const SUPABASE_ANON_KEY = "eyJ...";</pre>
         if (!d.todaysWorkout) return;
         await completeQuest("training", d.trainingQuestKey, trainingExpReward(d.rank), d.todaysWorkout.name);
         state.checkedExercises = {};
+        // NEW: clear set tracking + rest timer, then show the "training complete" popup
+        state.setsDone = {};
+        stopRest();
+        if (isQuestDone("training", d.trainingQuestKey)) state.trainingCompleteEvent = true;
+        render();
       }
+      else if (action === "start-rest") {
+        const key = btn.dataset.key;
+        if (state.restTimer && state.restTimer.key === key) { stopRest(); render(); } // tap again = skip rest
+        else if (!state.setsDone[key]) startRest(key);
+      }
+      else if (action === "close-training-complete") { state.trainingCompleteEvent = false; render(); }
       else if (action === "toggle-day") {
         const dow = Number(btn.dataset.dow);
         state.scheduleForm = state.scheduleForm.map((s) => s.day_of_week === dow ? { ...s, is_training_day: !s.is_training_day } : s);
