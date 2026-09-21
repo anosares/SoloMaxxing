@@ -1,0 +1,995 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+  <meta name="theme-color" content="#050912" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LevelUp" />
+  <meta name="description"
+    content="Solo Leveling-inspired personal training system — dumbbell + bodyweight + walking." />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚔️</text></svg>" />
+  <title>SoloMaxxing</title>
+
+  <!-- Tailwind Play CDN (JIT, no build step) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            void: "#050912",
+            panel: "#0A1220",
+            "panel-raised": "#0F1B2E",
+            line: "#1C3352",
+            cyan: { DEFAULT: "#4CD3FF", dim: "#2C7FA8", glow: "#8FE9FF" },
+            gold: "#FFC94A",
+            purple: "#9B7BFF",
+            danger: "#FF5470",
+            ink: { DEFAULT: "#E8F2FF", dim: "#7E93B0", faint: "#4A5C77" },
+          },
+          fontFamily: {
+            display: ["Orbitron", "sans-serif"],
+            body: ["Rajdhani", "sans-serif"],
+          },
+          boxShadow: {
+            glow: "0 0 0 1px rgba(76,211,255,0.25), 0 0 24px rgba(76,211,255,0.12)",
+            "glow-gold": "0 0 0 1px rgba(255,201,74,0.3), 0 0 24px rgba(255,201,74,0.15)",
+            "glow-purple": "0 0 0 1px rgba(155,123,255,0.35), 0 0 32px rgba(155,123,255,0.25)",
+          },
+          keyframes: {
+            fadeIn: { "0%": { opacity: 0, transform: "translateY(-4px)" }, "100%": { opacity: 1, transform: "translateY(0)" } },
+          },
+          animation: { fadeIn: "fadeIn .3s ease" },
+        },
+      },
+    };
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <style>
+    html,
+    body,
+    #app {
+      height: 100%;
+      background: #050912;
+    }
+
+    body {
+      font-family: "Rajdhani", sans-serif;
+      color: #E8F2FF;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: none;
+      margin: 0;
+    }
+
+    h1,
+    h2,
+    h3,
+    .font-display {
+      font-family: "Orbitron", sans-serif;
+      letter-spacing: 0.02em;
+    }
+
+    .panel {
+      position: relative;
+      background: linear-gradient(180deg, #0B1424 0%, #08101C 100%);
+      border: 1px solid #1C3352;
+      clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(76, 211, 255, 0.55) 0 10px, transparent 10px) top left / 100% 1px no-repeat,
+        linear-gradient(90deg, rgba(76, 211, 255, 0.55) 0 10px, transparent 10px) bottom right / 100% 1px no-repeat;
+    }
+
+    .scan-bg {
+      background-image: repeating-linear-gradient(180deg, rgba(76, 211, 255, 0.035) 0px, rgba(76, 211, 255, 0.035) 1px, transparent 1px, transparent 3px);
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #1C3352;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .pt-safe {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .input {
+      width: 100%;
+      background: #0F1B2E;
+      border: 1px solid #1C3352;
+      color: #E8F2FF;
+      padding: 10px 12px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 15px;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: #4CD3FF;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    // ============================================================
+    // 1. CONFIG — paste your Supabase project keys here before deploying.
+    //    The anon key is designed to be public in client-side code;
+    //    your data is protected by the RLS policies in schema.sql, not secrecy.
+    // ============================================================
+    const SUPABASE_URL = "https://eotmbsbbfvmzcokmighr.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvdG1ic2JiZnZtemNva21pZ2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5NzQzODksImV4cCI6MjEwNTU1MDM4OX0.3u4uMzLuOAXhqkjygDnoUe_GP-NQItWTEu9Zh9MqZ_I";
+
+    const isConfigured = SUPABASE_URL.startsWith("http") && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
+    const supabase = isConfigured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+    // ============================================================
+    // 2. STATIC DATA — rank/exp system, calorie math, workout split + pool
+    // ============================================================
+    const RANKS = ["E", "D", "C", "B", "A", "S"];
+    const RANK_THRESHOLDS = { E: 0, D: 500, C: 1500, B: 3500, A: 7000, S: 12000 };
+    const rankIndexOf = (r) => RANKS.indexOf(r);
+    const rankForExp = (totalExp) => {
+      let cur = "E";
+      for (const r of RANKS) if (totalExp >= RANK_THRESHOLDS[r]) cur = r;
+      return cur;
+    };
+    const nextRank = (r) => (rankIndexOf(r) >= RANKS.length - 1 ? null : RANKS[rankIndexOf(r) + 1]);
+    const rankProgress = (totalExp) => {
+      const rank = rankForExp(totalExp);
+      const next = nextRank(rank);
+      const floor = RANK_THRESHOLDS[rank];
+      if (!next) return { rank, next, pct: 1 };
+      const span = RANK_THRESHOLDS[next] - floor;
+      return { rank, next, pct: Math.min(1, (totalExp - floor) / span) };
+    };
+    const levelForExp = (totalExp) => Math.floor(totalExp / 100) + 1;
+    const EXP_REWARDS = { dailyQuest: 20, trainingQuestBase: 100, restDayQuest: 15 };
+    const trainingExpReward = (rank) => EXP_REWARDS.trainingQuestBase + rankIndexOf(rank) * 15;
+
+    const ACTIVITY_LEVELS = [
+      { key: "sedentary", label: "Sedentary (little/no exercise)", multiplier: 1.2 },
+      { key: "light", label: "Light (1-3 days/week)", multiplier: 1.375 },
+      { key: "moderate", label: "Moderate (3-5 days/week)", multiplier: 1.55 },
+      { key: "active", label: "Active (6-7 days/week)", multiplier: 1.725 },
+      { key: "very_active", label: "Very active (physical job + training)", multiplier: 1.9 },
+    ];
+    const calcBMR = ({ sex, weightKg, heightCm, age }) => {
+      if (!weightKg || !heightCm || !age) return null;
+      const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+      return sex === "female" ? base - 161 : base + 5;
+    };
+    const calcTDEE = ({ bmr, activityKey }) => {
+      if (!bmr) return null;
+      const level = ACTIVITY_LEVELS.find((l) => l.key === activityKey) || ACTIVITY_LEVELS[1];
+      return Math.round(bmr * level.multiplier);
+    };
+    const DEFICIT_PRESETS = [
+      { key: "mild", label: "Mild", perDay: 250, weeklyLossKg: 0.25 },
+      { key: "moderate", label: "Moderate", perDay: 500, weeklyLossKg: 0.5 },
+      { key: "aggressive", label: "Aggressive", perDay: 750, weeklyLossKg: 0.75 },
+    ];
+    const calcDeficitTargets = (tdee) => {
+      if (!tdee) return [];
+      return DEFICIT_PRESETS.map((p) => ({ ...p, target: Math.max(1200, tdee - p.perDay) }));
+    };
+
+    const BASE_SPLIT = [
+      {
+        id: 1, name: "Chest / Shoulders / Triceps", exercises: [
+          { slot: "chest_press", name: "Dumbbell Floor Press", sets: 3, reps: "10-12" },
+          { slot: "chest_fly", name: "Dumbbell Fly on Floor", sets: 3, reps: "12-15" },
+          { slot: "shoulder_press", name: "Dumbbell Shoulder Press", sets: 3, reps: "10-12" },
+          { slot: "lateral_raise", name: "Dumbbell Lateral Raise", sets: 3, reps: "12-15" },
+          { slot: "triceps", name: "Dumbbell Overhead Triceps Extension", sets: 3, reps: "12-15" },
+        ]
+      },
+      {
+        id: 2, name: "Legs", exercises: [
+          { slot: "squat", name: "Goblet Squat", sets: 3, reps: "12-15" },
+          { slot: "hinge", name: "Dumbbell Romanian Deadlift", sets: 3, reps: "10-12" },
+          { slot: "lunge", name: "Reverse Lunges", sets: 3, reps: "10/leg" },
+          { slot: "calves", name: "Dumbbell Calf Raises", sets: 3, reps: "15-20" },
+          { slot: "glutes", name: "Glute Bridge", sets: 3, reps: "15" },
+        ]
+      },
+      {
+        id: 3, name: "Back / Biceps", exercises: [
+          { slot: "row_single", name: "One-Arm Dumbbell Row", sets: 3, reps: "10-12/arm" },
+          { slot: "row_bent", name: "Bent-Over Dumbbell Row", sets: 3, reps: "10-12" },
+          { slot: "rear_delt", name: "Dumbbell Reverse Fly", sets: 3, reps: "12-15" },
+          { slot: "biceps", name: "Dumbbell Biceps Curl", sets: 3, reps: "10-12" },
+          { slot: "biceps_hammer", name: "Hammer Curl", sets: 3, reps: "10-12" },
+        ]
+      },
+      {
+        id: 4, name: "Legs + Core", exercises: [
+          { slot: "squat", name: "Goblet Squat", sets: 3, reps: "12-15" },
+          { slot: "hinge", name: "Romanian Deadlift", sets: 3, reps: "10-12" },
+          { slot: "lunge", name: "Reverse Lunges", sets: 3, reps: "10/leg" },
+          { slot: "glutes", name: "Glute Bridge", sets: 3, reps: "15" },
+          { slot: "core_lower", name: "Lying Leg Raises", sets: 3, reps: "12-15" },
+          { slot: "core_stability", name: "Dead Bug", sets: 3, reps: "10/side" },
+        ]
+      },
+      {
+        id: 5, name: "Full Body", exercises: [
+          { slot: "squat", name: "Goblet Squat", sets: 3, reps: "12-15" },
+          { slot: "chest_press", name: "Dumbbell Floor Press", sets: 3, reps: "10-12" },
+          { slot: "row_bent", name: "Dumbbell Row", sets: 3, reps: "10-12" },
+          { slot: "hinge", name: "Romanian Deadlift", sets: 3, reps: "10-12" },
+          { slot: "shoulder_press", name: "Shoulder Press", sets: 3, reps: "10-12" },
+          { slot: "biceps_hammer", name: "Hammer Curl", sets: 3, reps: "10-12" },
+        ]
+      },
+    ];
+
+    const EXERCISE_POOL = [
+      { slot: "squat", name: "Bulgarian Split Squat (chair-assisted)", sets: 3, reps: "8-10/leg", unlock: "C", days: [2, 4, 5] },
+      { slot: "chest_press", name: "Dumbbell Thruster", sets: 3, reps: "10-12", unlock: "C", days: [1, 5] },
+      { slot: "row_single", name: "Renegade Row", sets: 3, reps: "8-10/arm", unlock: "C", days: [3] },
+      { slot: "hinge", name: "Single-Leg RDL", sets: 3, reps: "8-10/leg", unlock: "C", days: [2, 4] },
+      { slot: "triceps", name: "Skull Crushers (floor)", sets: 3, reps: "10-12", unlock: "C", days: [1] },
+      { slot: "shoulder_press", name: "Arnold Press", sets: 3, reps: "10-12", unlock: "C", days: [1, 5] },
+      { slot: "core_stability", name: "Plank Shoulder Taps", sets: 3, reps: "30-40s", unlock: "C", days: [4] },
+      { slot: "lunge", name: "Walking Lunges", sets: 3, reps: "12/leg", unlock: "C", days: [2, 4] },
+      { slot: "squat", name: "Dumbbell Jump Squat", sets: 3, reps: "10-12", unlock: "B", days: [2, 4, 5] },
+      { slot: "core_lower", name: "Weighted Mountain Climbers", sets: 3, reps: "30-40s", unlock: "B", days: [4] },
+      { slot: "lunge", name: "Weighted Step-Ups", sets: 3, reps: "10/leg", unlock: "B", days: [2, 4] },
+      { slot: "chest_fly", name: "Incline Push-Ups (hands elevated)", sets: 3, reps: "AMRAP", unlock: "B", days: [1] },
+      { slot: "row_bent", name: "Dumbbell Snatch", sets: 3, reps: "8/arm", unlock: "B", days: [3, 5] },
+      { slot: "triceps", name: "Burpees", sets: 3, reps: "10-12", unlock: "B", days: [1] },
+      { slot: "chest_press", name: "Squat-to-Press Complex", sets: 4, reps: "8-10", unlock: "A", days: [5] },
+      { slot: "row_single", name: "Single-Arm Devil Press", sets: 3, reps: "6-8/arm", unlock: "A", days: [3] },
+      { slot: "chest_fly", name: "Pike Push-Ups", sets: 3, reps: "8-12", unlock: "A", days: [1] },
+      { slot: "hinge", name: "Row-to-Curl Complex", sets: 4, reps: "8-10", unlock: "A", days: [3] },
+      { slot: "squat", name: "Squat-Curl-Press Circuit", sets: 4, reps: "10", unlock: "S", days: [2, 4, 5] },
+      { slot: "core_stability", name: "Burpee Ladder Finisher", sets: 1, reps: "1-10 ladder", unlock: "S", days: [4] },
+      { slot: "row_bent", name: "Full Compound Circuit (row-squat-press)", sets: 4, reps: "8/move", unlock: "S", days: [3, 5] },
+    ];
+
+    const SWAPS_PER_TIER = { E: 0, D: 0, C: 1, B: 2, A: 2, S: 3 };
+    const BONUS_SETS_BY_RANK = { E: 0, D: 0, C: 0, B: 1, A: 1, S: 2 };
+    const rankAtLeast = (cur, req) => rankIndexOf(cur) >= rankIndexOf(req);
+
+    function buildWorkoutForDay(splitDayId, rank) {
+      const day = BASE_SPLIT.find((d) => d.id === splitDayId);
+      if (!day) return null;
+      const eligible = EXERCISE_POOL
+        .filter((p) => p.days.includes(splitDayId) && rankAtLeast(rank, p.unlock))
+        .sort((a, b) => rankIndexOf(b.unlock) - rankIndexOf(a.unlock));
+      const budget = SWAPS_PER_TIER[rank] ?? 0;
+      const swapMap = new Map();
+      for (const p of eligible) {
+        if (swapMap.size >= budget) break;
+        if (swapMap.has(p.slot)) continue;
+        if (!day.exercises.some((e) => e.slot === p.slot)) continue;
+        swapMap.set(p.slot, p);
+      }
+      const bonus = BONUS_SETS_BY_RANK[rank] ?? 0;
+      const exercises = day.exercises.map((base) => {
+        const swap = swapMap.get(base.slot);
+        const src = swap || base;
+        return { ...src, sets: src.sets + bonus, isUpgraded: Boolean(swap) };
+      });
+      return { ...day, exercises, rank };
+    }
+
+    const TRAINING_DAY_DAILY_QUESTS = [
+      { key: "hydration", text: "Drink 2L of water" },
+      { key: "walk_short", text: "Walk for 10-15 minutes" },
+    ];
+    const REST_DAY_QUESTS = [
+      { key: "hydration", text: "Drink 2L of water" },
+      { key: "stretch", text: "Stretch / mobility for 10 minutes" },
+      { key: "walk_light", text: "Light walk (optional, 10-20 minutes)" },
+    ];
+
+    // ============================================================
+    // 3. STATE
+    // ============================================================
+    const state = {
+      loading: true,
+      error: null,
+      tab: "status",
+      profile: null,
+      schedule: [],
+      stats: null,
+      completions: [],
+      weightLog: [],
+      expLog: [],
+      rankUpEvent: null,
+      toast: null,
+      checkedExercises: {},
+      scheduleForm: null, // local editable copy
+      profileForm: null,  // local editable copy
+      weightInput: "",
+    };
+
+    function todayISO() {
+      const d = new Date();
+      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 10);
+    }
+    function dayOfWeek(dateStr) { return new Date(dateStr + "T00:00:00").getDay(); }
+    const DATE = todayISO();
+
+    // ============================================================
+    // 4. SUPABASE I/O
+    // ============================================================
+    async function fetchAll() {
+      state.loading = true; state.error = null; render();
+      try {
+        const [{ data: p }, { data: sched }, { data: st }, { data: comp }, { data: wl }, { data: el }] = await Promise.all([
+          supabase.from("profile").select("*").limit(1).maybeSingle(),
+          supabase.from("schedule").select("*").order("day_of_week"),
+          supabase.from("player_stats").select("*").limit(1).maybeSingle(),
+          supabase.from("quest_completions").select("*").eq("date", DATE),
+          supabase.from("weight_log").select("*").order("date", { ascending: true }),
+          supabase.from("exp_log").select("*").order("created_at", { ascending: false }).limit(60),
+        ]);
+        state.profile = p || null;
+        state.schedule = sched || [];
+        state.stats = st || null;
+        state.completions = comp || [];
+        state.weightLog = wl || [];
+        state.expLog = el || [];
+        if (!state.scheduleForm) state.scheduleForm = state.schedule.map((s) => ({ ...s }));
+        if (!state.profileForm) state.profileForm = profileToForm(state.profile);
+      } catch (e) {
+        console.error(e);
+        state.error = e.message || "Failed to load data from Supabase.";
+      } finally {
+        state.loading = false; render();
+      }
+    }
+
+    function profileToForm(p) {
+      return {
+        name: p?.name || "",
+        age: p?.age ?? "",
+        height_cm: p?.height_cm ?? "",
+        weight_kg: p?.weight_kg ?? "",
+        sex: p?.sex || "male",
+        activity_level: p?.activity_level || "light",
+        deficit_preset: p?.deficit_preset || "moderate",
+      };
+    }
+
+    function isQuestDone(type, key) {
+      return state.completions.some((c) => c.quest_type === type && c.quest_key === key && c.completed);
+    }
+
+    async function addExp(amount, source, detail) {
+      const prevTotal = state.stats?.total_exp ?? 0;
+      const newTotal = prevTotal + amount;
+      const prevRank = rankForExp(prevTotal);
+      const newRank = rankForExp(newTotal);
+      await supabase.from("exp_log").insert({ date: DATE, source, detail, exp_gained: amount });
+      const updates = { total_exp: newTotal, updated_at: new Date().toISOString() };
+      if (source === "training_quest") updates.str_stat = (state.stats?.str_stat ?? 0) + 1;
+      if (source === "rest_quest" || (source === "daily_quest" && detail?.toLowerCase().includes("walk")))
+        updates.agi_stat = (state.stats?.agi_stat ?? 0) + 1;
+      if (state.stats?.id) await supabase.from("player_stats").update(updates).eq("id", state.stats.id);
+      else await supabase.from("player_stats").insert(updates);
+      if (newRank !== prevRank) state.rankUpEvent = { from: prevRank, to: newRank };
+      await fetchAll();
+    }
+
+    async function completeQuest(type, key, expReward, detail) {
+      if (isQuestDone(type, key)) return;
+      await supabase.from("quest_completions").insert({ date: DATE, quest_type: type, quest_key: key, exp_reward: expReward, completed: true });
+      const source = type === "training" ? "training_quest" : type === "rest" ? "rest_quest" : "daily_quest";
+      await addExp(expReward, source, detail);
+      state.toast = { title: type === "training" ? "TRAINING QUEST COMPLETE" : "QUEST COMPLETE", subtitle: `+${expReward} EXP · ${detail}` };
+      render();
+      setTimeout(() => { state.toast = null; render(); }, 2200);
+    }
+
+    async function maybeUpdateStreak(derived) {
+      if (!state.stats || !derived.allTodayDone) return;
+      if (state.stats.last_full_day_date === DATE) return;
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const continued = state.stats.last_full_day_date === yesterday;
+      const newStreak = continued ? (state.stats.streak_count ?? 0) + 1 : 1;
+      await supabase.from("player_stats").update({ streak_count: newStreak, last_full_day_date: DATE, vit_stat: (state.stats.vit_stat ?? 0) + 1 }).eq("id", state.stats.id);
+      await fetchAll();
+    }
+
+    async function saveProfile() {
+      const f = state.profileForm;
+      const fields = {
+        name: f.name, age: f.age ? Number(f.age) : null, height_cm: f.height_cm ? Number(f.height_cm) : null,
+        weight_kg: f.weight_kg ? Number(f.weight_kg) : null, sex: f.sex, activity_level: f.activity_level, deficit_preset: f.deficit_preset,
+      };
+      if (state.profile?.id) await supabase.from("profile").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", state.profile.id);
+      else await supabase.from("profile").insert(fields);
+      await fetchAll();
+    }
+
+    async function saveSchedule() {
+      const order = [1, 2, 3, 4, 5, 6, 0];
+      let slot = 0;
+      const withSlots = order.map((dow) => state.scheduleForm.find((s) => s.day_of_week === dow)).filter(Boolean).map((entry) => {
+        if (entry.is_training_day) { slot += 1; return { ...entry, split_slot: slot }; }
+        return { ...entry, split_slot: null };
+      });
+      await Promise.all(withSlots.map((row) =>
+        supabase.from("schedule").update({ is_training_day: row.is_training_day, split_slot: row.split_slot }).eq("day_of_week", row.day_of_week)
+      ));
+      state.scheduleForm = null;
+      await fetchAll();
+    }
+
+    async function logWeight() {
+      const w = Number(state.weightInput);
+      if (!w) return;
+      await supabase.from("weight_log").insert({ date: DATE, weight_kg: w });
+      state.profileForm.weight_kg = w;
+      await supabase.from("profile").update({ weight_kg: w, updated_at: new Date().toISOString() }).eq("id", state.profile.id);
+      state.weightInput = "";
+      await fetchAll();
+    }
+
+    // ============================================================
+    // 5. DERIVED STATE
+    // ============================================================
+    function computeDerived() {
+      const totalExp = state.stats?.total_exp ?? 0;
+      const rank = rankForExp(totalExp);
+      const progress = rankProgress(totalExp);
+      const level = levelForExp(totalExp);
+      const todayDow = dayOfWeek(DATE);
+      const todayEntry = state.schedule.find((s) => s.day_of_week === todayDow);
+      const isTrainingDay = Boolean(todayEntry?.is_training_day);
+      const trainingDays = state.schedule.filter((s) => s.is_training_day).sort((a, b) => a.split_slot - b.split_slot);
+
+      let splitDayForToday = null;
+      if (isTrainingDay && trainingDays.length) {
+        const idx = trainingDays.findIndex((s) => s.day_of_week === todayDow);
+        splitDayForToday = BASE_SPLIT[idx % BASE_SPLIT.length].id;
+      }
+
+      let tomorrowPreview = null;
+      if (state.schedule.length) {
+        const tomorrowDow = (todayDow + 1) % 7;
+        const entry = state.schedule.find((s) => s.day_of_week === tomorrowDow);
+        if (entry?.is_training_day) {
+          const idx = trainingDays.findIndex((s) => s.day_of_week === tomorrowDow);
+          if (idx !== -1) {
+            const day = BASE_SPLIT[idx % BASE_SPLIT.length];
+            tomorrowPreview = { isTrainingDay: true, dayName: day.name };
+          }
+        } else {
+          tomorrowPreview = { isTrainingDay: false };
+        }
+      }
+
+      const todaysWorkout = splitDayForToday ? buildWorkoutForDay(splitDayForToday, rank) : null;
+      const todaysDailyQuests = isTrainingDay ? TRAINING_DAY_DAILY_QUESTS : REST_DAY_QUESTS;
+      const trainingQuestKey = todaysWorkout ? `training_day${todaysWorkout.id}` : null;
+      const trainingDone = trainingQuestKey ? isQuestDone("training", trainingQuestKey) : false;
+      const dailyType = isTrainingDay ? "daily" : "rest";
+      const dailyDoneCount = todaysDailyQuests.filter((q) => isQuestDone(dailyType, q.key)).length;
+      const dailyAllDone = dailyDoneCount === todaysDailyQuests.length;
+      const allTodayDone = isTrainingDay ? (dailyAllDone && trainingDone) : dailyAllDone;
+
+      return { totalExp, rank, progress, level, isTrainingDay, todaysWorkout, tomorrowPreview, todaysDailyQuests, dailyType, dailyDoneCount, trainingQuestKey, trainingDone, allTodayDone, trainingDays };
+    }
+
+    // ============================================================
+    // 6. RENDER — screens
+    // ============================================================
+    function iconSvg(name, active) {
+      const c = active ? "#4CD3FF" : "#4A5C77";
+      const icons = {
+        status: `<path d="M12 2l2.5 5.5L20 9l-5 4 1.3 6L12 16l-4.3 3L9 13l-5-4 5.5-1.5L12 2z" stroke="${c}" stroke-width="1.6" stroke-linejoin="round" fill="none"/>`,
+        quests: `<rect x="4" y="3" width="16" height="18" rx="1" stroke="${c}" stroke-width="1.6" fill="none"/><path d="M7.5 8h9M7.5 12h9M7.5 16h5.5" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`,
+        schedule: `<rect x="3.5" y="4.5" width="17" height="16" rx="1" stroke="${c}" stroke-width="1.6" fill="none"/><path d="M3.5 9.5h17M8 3v3M16 3v3" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`,
+        log: `<path d="M4 19V9l5-5 5 5v10" stroke="${c}" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M4 19h16M14 19v-6h4v6" stroke="${c}" stroke-width="1.6" stroke-linejoin="round" fill="none"/>`,
+        profile: `<circle cx="12" cy="8" r="3.4" stroke="${c}" stroke-width="1.6" fill="none"/><path d="M5 20c1.2-4 4-6 7-6s5.8 2 7 6" stroke="${c}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`,
+      };
+      return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none">${icons[name]}</svg>`;
+    }
+
+    function renderBottomNav() {
+      const tabs = [["status", "Status"], ["quests", "Quests"], ["schedule", "Schedule"], ["log", "Log"], ["profile", "Hunter"]];
+      return `
+      <nav class="fixed bottom-0 left-0 right-0 z-30 pb-safe bg-void/95 backdrop-blur border-t border-line">
+        <div class="grid grid-cols-5 max-w-md mx-auto">
+          ${tabs.map(([key, label]) => `
+            <button data-action="nav" data-tab="${key}" class="flex flex-col items-center justify-center gap-1 py-2.5 min-h-[52px] active:opacity-70">
+              ${iconSvg(key, state.tab === key)}
+              <span class="text-[11px] font-body tracking-wide ${state.tab === key ? "text-cyan" : "text-ink-faint"}">${label}</span>
+            </button>`).join("")}
+        </div>
+      </nav>`;
+    }
+
+    function renderToast() {
+      if (!state.toast) return "";
+      return `
+      <div class="fixed top-0 left-0 right-0 z-40 pt-safe flex justify-center px-4 mt-3 pointer-events-none">
+        <div class="panel shadow-glow px-4 py-2.5 max-w-xs w-full text-center animate-fadeIn">
+          <p class="text-cyan font-display text-xs tracking-wide">${state.toast.title}</p>
+          <p class="text-ink-dim text-xs font-body mt-0.5">${state.toast.subtitle}</p>
+        </div>
+      </div>`;
+    }
+
+    function renderRankUpModal() {
+      if (!state.rankUpEvent) return "";
+      const { from, to } = state.rankUpEvent;
+      return `
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-void/90 backdrop-blur-sm px-6">
+        <div class="panel shadow-glow-purple px-6 py-8 max-w-sm w-full text-center animate-fadeIn">
+          <p class="text-purple text-xs tracking-[0.3em] font-body mb-2">SYSTEM NOTIFICATION</p>
+          <h2 class="font-display text-2xl text-ink mb-1">RANK UP</h2>
+          <div class="flex items-center justify-center gap-4 my-6">
+            <span class="font-display text-3xl text-ink-dim">${from}</span>
+            <span class="text-purple text-xl">→</span>
+            <span class="font-display text-4xl text-purple">${to}</span>
+          </div>
+          <p class="text-ink-dim font-body text-sm mb-6 leading-relaxed">Your training has been recognized. New skills may now be available, and your quests will grow more demanding.</p>
+          <button data-action="close-rankup" class="w-full py-3 bg-purple/20 border border-purple text-purple font-display text-sm tracking-wide active:bg-purple/30">CONTINUE</button>
+        </div>
+      </div>`;
+    }
+
+    function renderStatus(d) {
+      return `
+      <div class="px-4 pt-safe pb-28 max-w-md mx-auto">
+        <header class="pt-6 pb-4">
+          <p class="text-cyan text-[11px] tracking-[0.35em] font-body">STATUS WINDOW</p>
+          <h1 class="font-display text-2xl mt-1">${state.profile?.name || "Hunter"}</h1>
+        </header>
+
+        <div class="panel scan-bg shadow-glow px-4 py-4">
+          <div class="flex items-start justify-between">
+            <div><p class="text-ink-dim text-xs font-body tracking-wide">RANK</p><p class="font-display text-4xl text-cyan leading-none mt-1">${d.rank}</p></div>
+            <div class="text-right"><p class="text-ink-dim text-xs font-body tracking-wide">LEVEL</p><p class="font-display text-4xl text-gold leading-none mt-1">${d.level}</p></div>
+          </div>
+          <div class="mt-5">
+            <div class="flex justify-between text-xs text-ink-dim font-body mb-1">
+              <span>${d.progress.next ? `EXP to Rank ${d.progress.next}` : "MAX RANK"}</span>
+              <span>${Math.round(d.progress.pct * 100)}%</span>
+            </div>
+            <div class="h-2.5 w-full bg-panel-raised border border-line relative overflow-hidden">
+              <div class="h-full bg-cyan transition-all duration-700 ease-out" style="width:${Math.max(2, d.progress.pct * 100)}%"></div>
+            </div>
+            <p class="text-right text-[11px] text-ink-faint font-body mt-1">${d.totalExp} total EXP</p>
+          </div>
+          <div class="grid grid-cols-3 gap-2 mt-5">
+            <div class="border border-line bg-panel-raised px-2 py-2 text-center"><p class="text-[10px] text-ink-faint font-body">STR</p><p class="font-display text-base text-ink mt-0.5">${state.stats?.str_stat ?? 0}</p></div>
+            <div class="border border-line bg-panel-raised px-2 py-2 text-center"><p class="text-[10px] text-ink-faint font-body">VIT</p><p class="font-display text-base text-ink mt-0.5">${state.stats?.vit_stat ?? 0}</p></div>
+            <div class="border border-line bg-panel-raised px-2 py-2 text-center"><p class="text-[10px] text-ink-faint font-body">AGI</p><p class="font-display text-base text-ink mt-0.5">${state.stats?.agi_stat ?? 0}</p></div>
+          </div>
+        </div>
+
+        <div class="panel px-4 py-4 mt-4 flex items-center justify-between">
+          <div><p class="text-ink-dim text-xs font-body tracking-wide">STREAK</p><p class="font-display text-xl text-ink mt-0.5">${state.stats?.streak_count ?? 0} days</p></div>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2c1 3-3 4-3 8a3 3 0 006 0c0-1-1-2-1-2 2 1 3 3 3 5a5 5 0 11-10 0c0-4 3-6 5-11z" stroke="#FFC94A" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </div>
+
+        <div class="panel px-4 py-4 mt-4">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-ink-dim text-xs font-body tracking-wide">${d.isTrainingDay ? "TODAY'S QUEST" : "RECOVERY ZONE"}</p>
+            <span class="text-[10px] font-body px-2 py-0.5 border ${d.isTrainingDay ? "border-cyan text-cyan" : "border-line text-ink-faint"}">${d.isTrainingDay ? "TRAINING DAY" : "REST DAY"}</span>
+          </div>
+          ${d.isTrainingDay && d.todaysWorkout ? `
+            <p class="font-display text-lg text-ink">${d.todaysWorkout.name}</p>
+            <p class="text-ink-dim text-sm font-body mt-1">${d.todaysWorkout.exercises.length} exercises${d.trainingDone ? " · complete" : ""}</p>
+          ` : `
+            <p class="font-display text-lg text-ink">You have entered a Recovery Zone.</p>
+            <p class="text-ink-dim text-sm font-body mt-1">Light quests only today. Let your body repair.</p>
+            ${d.tomorrowPreview?.isTrainingDay ? `<p class="text-cyan text-xs font-body mt-3">Tomorrow: ${d.tomorrowPreview.dayName}</p>` : ""}
+          `}
+          <p class="text-ink-faint text-xs font-body mt-3">Daily quests: ${d.dailyDoneCount}/${d.todaysDailyQuests.length} complete</p>
+          <button data-action="nav" data-tab="quests" class="mt-4 w-full py-3 bg-cyan/10 border border-cyan text-cyan font-display text-xs tracking-wide active:bg-cyan/20">OPEN QUEST LOG</button>
+        </div>
+      </div>`;
+    }
+
+    function checkboxSvg(checked) {
+      return `<span class="w-5 h-5 flex items-center justify-center border shrink-0 ${checked ? "bg-cyan border-cyan" : "border-ink-faint"}">
+        ${checked ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="#050912" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
+      </span>`;
+    }
+
+    function renderQuests(d) {
+      const dailyReward = d.isTrainingDay ? EXP_REWARDS.dailyQuest : EXP_REWARDS.restDayQuest;
+      const allExChecked = d.todaysWorkout && d.todaysWorkout.exercises.every((e) => state.checkedExercises[e.slot]);
+      return `
+      <div class="px-4 pt-safe pb-28 max-w-md mx-auto">
+        <header class="pt-6 pb-4">
+          <p class="text-cyan text-[11px] tracking-[0.35em] font-body">QUEST LOG</p>
+          <h1 class="font-display text-2xl mt-1">${d.isTrainingDay ? "Today's Quests" : "Recovery Zone"}</h1>
+        </header>
+
+        ${d.isTrainingDay && d.todaysWorkout ? `
+        <div class="panel shadow-glow px-4 py-4 mb-4">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-body px-2 py-0.5 border border-gold text-gold">TRAINING QUEST</span>
+            <span class="text-gold text-xs font-body">+${trainingExpReward(d.rank)} EXP</span>
+          </div>
+          <h2 class="font-display text-lg text-ink mt-2">${d.todaysWorkout.name}</h2>
+          <ul class="mt-3 space-y-2">
+            ${d.todaysWorkout.exercises.map((ex) => {
+        const checked = Boolean(state.checkedExercises[ex.slot]) || d.trainingDone;
+        return `
+              <li>
+                <button data-action="toggle-exercise" data-slot="${ex.slot}" ${d.trainingDone ? "disabled" : ""}
+                  class="w-full flex items-center gap-3 text-left px-3 py-2.5 border ${checked ? "border-cyan/60 bg-cyan/5" : "border-line bg-panel-raised"}">
+                  ${checkboxSvg(checked)}
+                  <span class="flex-1">
+                    <span class="block text-ink text-sm font-body">${ex.name}${ex.isUpgraded ? `<span class="ml-2 text-[10px] text-purple align-middle">NEW SKILL</span>` : ""}</span>
+                    <span class="block text-ink-faint text-xs font-body">${ex.sets} sets × ${ex.reps}</span>
+                  </span>
+                </button>
+              </li>`;
+      }).join("")}
+          </ul>
+          <button data-action="complete-training" ${(!allExChecked || d.trainingDone) ? "disabled" : ""}
+            class="mt-4 w-full py-3 font-display text-xs tracking-wide border ${d.trainingDone ? "border-line text-ink-faint" : allExChecked ? "border-gold text-gold bg-gold/10 active:bg-gold/20" : "border-line text-ink-faint"}">
+            ${d.trainingDone ? "QUEST COMPLETE" : "COMPLETE TRAINING QUEST"}
+          </button>
+        </div>` : `
+        <div class="panel px-4 py-4 mb-4">
+          <p class="font-display text-ink text-base">No training quest today.</p>
+          <p class="text-ink-dim text-sm font-body mt-1">Recovery is part of the grind — light quests only.</p>
+          ${d.tomorrowPreview?.isTrainingDay ? `<p class="text-cyan text-xs font-body mt-3">Next up tomorrow: ${d.tomorrowPreview.dayName}</p>` : ""}
+        </div>`}
+
+        <div class="panel px-4 py-4">
+          <span class="text-[10px] font-body px-2 py-0.5 border border-cyan text-cyan">DAILY QUESTS</span>
+          <ul class="mt-3 space-y-2">
+            ${d.todaysDailyQuests.map((q) => {
+        const done = isQuestDone(d.dailyType, q.key);
+        return `
+              <li>
+                <button data-action="complete-daily" data-key="${q.key}" data-text="${q.text}" data-reward="${dailyReward}" ${done ? "disabled" : ""}
+                  class="w-full flex items-center gap-3 text-left px-3 py-2.5 border ${done ? "border-cyan/60 bg-cyan/5" : "border-line bg-panel-raised"}">
+                  ${checkboxSvg(done)}
+                  <span class="flex-1 text-ink text-sm font-body">${q.text}</span>
+                  <span class="text-cyan text-xs font-body">+${dailyReward}</span>
+                </button>
+              </li>`;
+      }).join("")}
+          </ul>
+        </div>
+      </div>`;
+    }
+
+    const DAYS_UI = [
+      { dow: 1, label: "Monday", short: "MON" }, { dow: 2, label: "Tuesday", short: "TUE" },
+      { dow: 3, label: "Wednesday", short: "WED" }, { dow: 4, label: "Thursday", short: "THU" },
+      { dow: 5, label: "Friday", short: "FRI" }, { dow: 6, label: "Saturday", short: "SAT" },
+      { dow: 0, label: "Sunday", short: "SUN" },
+    ];
+
+    function renderSchedule() {
+      const local = state.scheduleForm || [];
+      const trainingCount = local.filter((d) => d.is_training_day).length;
+      const preview = DAYS_UI.filter((d) => local.find((s) => s.day_of_week === d.dow)?.is_training_day)
+        .map((d, i) => ({ ...d, splitDay: BASE_SPLIT[i % BASE_SPLIT.length] }));
+      return `
+      <div class="px-4 pt-safe pb-28 max-w-md mx-auto">
+        <header class="pt-6 pb-4">
+          <p class="text-cyan text-[11px] tracking-[0.35em] font-body">CONFIGURATION</p>
+          <h1 class="font-display text-2xl mt-1">Weekly Schedule</h1>
+          <p class="text-ink-dim text-sm font-body mt-1">Choose your training days. Everything else becomes a Recovery Zone.</p>
+        </header>
+        <div class="panel px-4 py-4">
+          <ul class="divide-y divide-line">
+            ${DAYS_UI.map((d) => {
+        const entry = local.find((s) => s.day_of_week === d.dow);
+        const isOn = Boolean(entry?.is_training_day);
+        return `
+              <li class="flex items-center justify-between py-3">
+                <span class="font-body text-sm text-ink">${d.label}</span>
+                <button data-action="toggle-day" data-dow="${d.dow}" class="relative w-14 h-8 border transition-colors ${isOn ? "border-cyan bg-cyan/15" : "border-line bg-panel-raised"}">
+                  <span class="absolute top-1 h-5 w-5 transition-all ${isOn ? "left-7 bg-cyan" : "left-1 bg-ink-faint"}"></span>
+                </button>
+              </li>`;
+      }).join("")}
+          </ul>
+        </div>
+        ${trainingCount === 0 ? `<p class="text-danger text-xs font-body mt-3">Pick at least one training day to receive Training Quests.</p>` : ""}
+        ${preview.length ? `
+        <div class="panel px-4 py-4 mt-4">
+          <p class="text-ink-dim text-xs font-body tracking-wide mb-3">SPLIT PREVIEW</p>
+          <ul class="space-y-2">
+            ${preview.map((p) => `<li class="flex items-center justify-between text-sm font-body"><span class="text-ink-dim">${p.short}</span><span class="text-ink">${p.splitDay.name}</span></li>`).join("")}
+          </ul>
+          <p class="text-ink-faint text-[11px] font-body mt-3">The split cycles through your ${trainingCount} chosen days in order, then repeats.</p>
+        </div>` : ""}
+        <button data-action="save-schedule" ${trainingCount === 0 ? "disabled" : ""} class="mt-5 w-full py-3 bg-cyan/10 border border-cyan text-cyan font-display text-xs tracking-wide active:bg-cyan/20 disabled:opacity-40">SAVE SCHEDULE</button>
+      </div>`;
+    }
+
+    function renderProfile() {
+      const f = state.profileForm || profileToForm(state.profile);
+      const bmr = calcBMR({ sex: f.sex, weightKg: Number(f.weight_kg), heightCm: Number(f.height_cm), age: Number(f.age) });
+      const tdee = calcTDEE({ bmr, activityKey: f.activity_level });
+      const deficits = calcDeficitTargets(tdee);
+      const selectedDeficit = deficits.find((x) => x.key === f.deficit_preset);
+      return `
+      <div class="px-4 pt-safe pb-28 max-w-md mx-auto">
+        <header class="pt-6 pb-4">
+          <p class="text-cyan text-[11px] tracking-[0.35em] font-body">HUNTER PROFILE</p>
+          <h1 class="font-display text-2xl mt-1">Your Info</h1>
+        </header>
+        <div class="panel px-4 py-4">
+          <div class="space-y-3">
+            <label class="block"><span class="block text-ink-faint text-xs font-body mb-1">Name</span>
+              <input class="input" data-field="name" value="${f.name}" placeholder="Your name" /></label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block"><span class="block text-ink-faint text-xs font-body mb-1">Age</span>
+                <input class="input" type="number" inputmode="numeric" data-field="age" value="${f.age}" /></label>
+              <label class="block"><span class="block text-ink-faint text-xs font-body mb-1">Sex</span>
+                <select class="input" data-field="sex">
+                  <option value="male" ${f.sex === "male" ? "selected" : ""}>Male</option>
+                  <option value="female" ${f.sex === "female" ? "selected" : ""}>Female</option>
+                </select></label>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block"><span class="block text-ink-faint text-xs font-body mb-1">Height (cm)</span>
+                <input class="input" type="number" inputmode="decimal" data-field="height_cm" value="${f.height_cm}" /></label>
+              <label class="block"><span class="block text-ink-faint text-xs font-body mb-1">Weight (kg)</span>
+                <input class="input" type="number" inputmode="decimal" data-field="weight_kg" value="${f.weight_kg}" /></label>
+            </div>
+            <label class="block"><span class="block text-ink-faint text-xs font-body mb-1">Activity level</span>
+              <select class="input" data-field="activity_level">
+                ${ACTIVITY_LEVELS.map((l) => `<option value="${l.key}" ${f.activity_level === l.key ? "selected" : ""}>${l.label}</option>`).join("")}
+              </select></label>
+          </div>
+          <button data-action="save-profile" class="mt-4 w-full py-3 bg-cyan/10 border border-cyan text-cyan font-display text-xs tracking-wide active:bg-cyan/20">SAVE PROFILE</button>
+        </div>
+
+        <div class="panel px-4 py-4 mt-4">
+          <p class="text-ink-dim text-xs font-body tracking-wide mb-3">CALORIE TARGETS</p>
+          ${bmr && tdee ? `
+            <div class="grid grid-cols-2 gap-3">
+              <div class="border border-line bg-panel-raised px-3 py-2.5"><p class="text-[10px] text-ink-faint font-body">BMR</p><p class="font-display text-lg text-ink mt-0.5">${Math.round(bmr)} <span class="text-xs text-ink-faint font-body">kcal</span></p></div>
+              <div class="border border-line bg-panel-raised px-3 py-2.5"><p class="text-[10px] text-ink-faint font-body">Maintenance (TDEE)</p><p class="font-display text-lg text-ink mt-0.5">${tdee} <span class="text-xs text-ink-faint font-body">kcal</span></p></div>
+            </div>
+            <p class="text-ink-dim text-xs font-body tracking-wide mt-5 mb-2">DEFICIT TARGET</p>
+            <div class="space-y-2">
+              ${DEFICIT_PRESETS.map((preset) => {
+        const dd = deficits.find((x) => x.key === preset.key);
+        const selected = f.deficit_preset === preset.key;
+        return `
+                <button data-action="select-deficit" data-key="${preset.key}" class="w-full flex items-center justify-between px-3 py-2.5 border text-left ${selected ? "border-cyan bg-cyan/5" : "border-line bg-panel-raised"}">
+                  <span class="font-body text-sm text-ink">${preset.label}<span class="text-ink-faint text-xs ml-2">-${preset.perDay} kcal/day</span></span>
+                  <span class="font-display text-sm text-cyan">${dd?.target} kcal</span>
+                </button>`;
+      }).join("")}
+            </div>
+            ${selectedDeficit ? `<p class="text-ink-faint text-[11px] font-body mt-3">At this rate, expect roughly ${selectedDeficit.weeklyLossKg} kg/week of loss. Eat around <span class="text-ink">${selectedDeficit.target} kcal/day</span>.</p>` : ""}
+          ` : `<p class="text-ink-faint text-sm font-body">Fill in your age, sex, height and weight above to see your calorie targets.</p>`}
+        </div>
+
+        <div class="panel px-4 py-4 mt-4">
+          <p class="text-ink-dim text-xs font-body tracking-wide mb-3">LOG TODAY'S WEIGHT</p>
+          <div class="flex gap-2">
+            <input class="input flex-1" type="number" inputmode="decimal" placeholder="kg" data-field="weightInput" value="${state.weightInput}" />
+            <button data-action="log-weight" class="px-4 border border-cyan text-cyan font-display text-xs active:bg-cyan/10">LOG</button>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function sparkline(points) {
+      if (points.length < 2) return "";
+      const w = 300, h = 140, pad = 10;
+      const vals = points.map((p) => p.kg);
+      const min = Math.min(...vals), max = Math.max(...vals);
+      const span = max - min || 1;
+      const stepX = (w - pad * 2) / (points.length - 1);
+      const coords = points.map((p, i) => {
+        const x = pad + i * stepX;
+        const y = h - pad - ((p.kg - min) / span) * (h - pad * 2);
+        return [x, y];
+      });
+      const path = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+      const dots = coords.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#4CD3FF"/>`).join("");
+      return `<svg viewBox="0 0 ${w} ${h}" class="w-full" style="height:160px">
+        <path d="${path}" fill="none" stroke="#4CD3FF" stroke-width="2"/>
+        ${dots}
+      </svg>
+      <div class="flex justify-between text-[10px] text-ink-faint font-body mt-1"><span>${points[0].date}</span><span>${points[points.length - 1].date}</span></div>`;
+    }
+
+    function sourceLabel(source) {
+      if (source === "training_quest") return "Training Quest";
+      if (source === "rest_quest") return "Recovery Quest";
+      return "Daily Quest";
+    }
+
+    function renderHistory(d) {
+      const weightData = state.weightLog.map((w) => ({ date: w.date.slice(5), kg: Number(w.weight_kg) }));
+      return `
+      <div class="px-4 pt-safe pb-28 max-w-md mx-auto">
+        <header class="pt-6 pb-4">
+          <p class="text-cyan text-[11px] tracking-[0.35em] font-body">RECORDS</p>
+          <h1 class="font-display text-2xl mt-1">Hunter Log</h1>
+        </header>
+        <div class="panel px-4 py-4">
+          <p class="text-ink-dim text-xs font-body tracking-wide mb-3">RANK LADDER</p>
+          <div class="space-y-2">
+            ${RANKS.map((r) => {
+        const reached = d.totalExp >= RANK_THRESHOLDS[r];
+        const isCurrent = r === d.rank;
+        return `
+              <div class="flex items-center justify-between px-3 py-2 border ${isCurrent ? "border-cyan bg-cyan/5" : reached ? "border-line" : "border-line/50"}">
+                <span class="font-display text-sm ${isCurrent ? "text-cyan" : reached ? "text-ink" : "text-ink-faint"}">Rank ${r}</span>
+                <span class="text-ink-faint text-xs font-body">${RANK_THRESHOLDS[r]} EXP</span>
+              </div>`;
+      }).join("")}
+          </div>
+        </div>
+        ${weightData.length > 1 ? `
+        <div class="panel px-4 py-4 mt-4">
+          <p class="text-ink-dim text-xs font-body tracking-wide mb-3">WEIGHT TREND</p>
+          ${sparkline(weightData)}
+        </div>` : ""}
+        <div class="panel px-4 py-4 mt-4">
+          <p class="text-ink-dim text-xs font-body tracking-wide mb-3">RECENT EXP</p>
+          ${state.expLog.length === 0 ? `<p class="text-ink-faint text-sm font-body">No EXP earned yet. Complete a quest to begin.</p>` : `
+          <ul class="divide-y divide-line">
+            ${state.expLog.map((e) => `
+            <li class="flex items-center justify-between py-2 text-sm font-body">
+              <div><p class="text-ink">${e.detail || sourceLabel(e.source)}</p><p class="text-ink-faint text-xs">${e.date}</p></div>
+              <span class="text-gold">+${e.exp_gained}</span>
+            </li>`).join("")}
+          </ul>`}
+        </div>
+      </div>`;
+    }
+
+    function renderSetupNeeded() {
+      return `
+      <div class="min-h-screen flex items-center justify-center px-6 pt-safe pb-safe">
+        <div class="panel shadow-glow max-w-sm w-full px-4 py-4">
+          <p class="text-cyan text-xs tracking-[0.3em] font-body mb-2">SYSTEM OFFLINE</p>
+          <h1 class="font-display text-xl text-ink mb-3">Connect Supabase</h1>
+          <p class="text-ink-dim text-sm font-body leading-relaxed mb-4">
+            Open <code class="text-cyan">index.html</code> and set <code class="text-cyan">SUPABASE_URL</code> and
+            <code class="text-cyan">SUPABASE_ANON_KEY</code> near the top of the script block.
+          </p>
+          <pre class="bg-panel-raised border border-line px-3 py-2 text-xs text-ink font-body overflow-x-auto mb-4">const SUPABASE_URL = "https://xxxx.supabase.co";
+const SUPABASE_ANON_KEY = "eyJ...";</pre>
+          <p class="text-ink-dim text-sm font-body leading-relaxed">
+            Then run <code class="text-cyan">schema.sql</code> once in your Supabase project's SQL Editor.
+            See <code class="text-cyan">README.md</code> for full setup steps.
+          </p>
+        </div>
+      </div>`;
+    }
+
+    // ============================================================
+    // 7. MASTER RENDER + EVENT DELEGATION
+    // ============================================================
+    function render() {
+      const app = document.getElementById("app");
+      if (!isConfigured) { app.innerHTML = renderSetupNeeded(); return; }
+      if (state.loading) {
+        app.innerHTML = `<div class="min-h-screen flex items-center justify-center"><p class="font-display text-cyan text-sm tracking-widest animate-pulse">LOADING SYSTEM...</p></div>`;
+        return;
+      }
+      if (state.error) {
+        app.innerHTML = `<div class="min-h-screen flex items-center justify-center px-6 text-center"><p class="text-danger font-body text-sm">${state.error}</p></div>`;
+        return;
+      }
+      const d = computeDerived();
+      let screen = "";
+      if (state.tab === "status") screen = renderStatus(d);
+      else if (state.tab === "quests") screen = renderQuests(d);
+      else if (state.tab === "schedule") screen = renderSchedule();
+      else if (state.tab === "log") screen = renderHistory(d);
+      else if (state.tab === "profile") screen = renderProfile();
+
+      app.innerHTML = `
+        <div class="min-h-screen bg-void">
+          ${renderToast()}
+          ${renderRankUpModal()}
+          ${screen}
+          ${renderBottomNav()}
+        </div>`;
+
+      maybeUpdateStreak(d);
+    }
+
+    document.body.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const d = computeDerived();
+
+      if (action === "nav") { state.tab = btn.dataset.tab; render(); }
+      else if (action === "complete-daily") {
+        await completeQuest(d.dailyType, btn.dataset.key, Number(btn.dataset.reward), btn.dataset.text);
+      }
+      else if (action === "toggle-exercise") {
+        state.checkedExercises[btn.dataset.slot] = !state.checkedExercises[btn.dataset.slot];
+        render();
+      }
+      else if (action === "complete-training") {
+        if (!d.todaysWorkout) return;
+        await completeQuest("training", d.trainingQuestKey, trainingExpReward(d.rank), d.todaysWorkout.name);
+        state.checkedExercises = {};
+      }
+      else if (action === "toggle-day") {
+        const dow = Number(btn.dataset.dow);
+        state.scheduleForm = state.scheduleForm.map((s) => s.day_of_week === dow ? { ...s, is_training_day: !s.is_training_day } : s);
+        render();
+      }
+      else if (action === "save-schedule") { await saveSchedule(); }
+      else if (action === "save-profile") { await saveProfile(); }
+      else if (action === "select-deficit") { state.profileForm.deficit_preset = btn.dataset.key; render(); }
+      else if (action === "log-weight") { await logWeight(); }
+      else if (action === "close-rankup") { state.rankUpEvent = null; render(); }
+    });
+
+    document.body.addEventListener("input", (e) => {
+      const field = e.target.dataset.field;
+      if (!field) return;
+      if (field === "weightInput") { state.weightInput = e.target.value; return; }
+      if (!state.profileForm) state.profileForm = profileToForm(state.profile);
+      state.profileForm[field] = e.target.value;
+    });
+    document.body.addEventListener("change", (e) => {
+      const field = e.target.dataset.field;
+      if (!field || !state.profileForm) return;
+      state.profileForm[field] = e.target.value;
+      if (field === "sex" || field === "activity_level") render();
+    });
+
+    // ============================================================
+    // 8. BOOT
+    // ============================================================
+    if (isConfigured) fetchAll();
+    else render();
+  </script>
+</body>
+
+</html>
