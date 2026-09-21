@@ -376,7 +376,7 @@
         state.completions = comp || [];
         state.weightLog = wl || [];
         state.expLog = el || [];
-        if (!state.scheduleForm) state.scheduleForm = state.schedule.map((s) => ({ ...s }));
+        if (!state.scheduleForm) state.scheduleForm = buildScheduleForm(state.schedule);
         if (!state.profileForm) state.profileForm = profileToForm(state.profile);
       } catch (e) {
         console.error(e);
@@ -384,6 +384,15 @@
       } finally {
         state.loading = false; render();
       }
+    }
+
+    // NEW: the Schedule screen always gets all 7 days, even if the "schedule" table is empty
+    // or missing some days. Missing days default to Mon-Fri = training, Sat/Sun = rest.
+    function buildScheduleForm(rows) {
+      return [1, 2, 3, 4, 5, 6, 0].map((dow) => {
+        const row = (rows || []).find((s) => s.day_of_week === dow);
+        return row ? { ...row } : { day_of_week: dow, is_training_day: dow >= 1 && dow <= 5, split_slot: null };
+      });
     }
 
     function profileToForm(p) {
@@ -456,11 +465,22 @@
         if (entry.is_training_day) { slot += 1; return { ...entry, split_slot: slot }; }
         return { ...entry, split_slot: null };
       });
-      await Promise.all(withSlots.map((row) =>
-        supabase.from("schedule").update({ is_training_day: row.is_training_day, split_slot: row.split_slot }).eq("day_of_week", row.day_of_week)
-      ));
-      state.scheduleForm = null;
+      // NEW: update days that already exist in the table, insert the ones that don't
+      const results = await Promise.all(withSlots.map((row) => {
+        const fields = { is_training_day: row.is_training_day, split_slot: row.split_slot };
+        const exists = state.schedule.some((s) => s.day_of_week === row.day_of_week);
+        return exists
+          ? supabase.from("schedule").update(fields).eq("day_of_week", row.day_of_week)
+          : supabase.from("schedule").insert({ day_of_week: row.day_of_week, ...fields });
+      }));
+      const failed = results.find((r) => r && r.error);
+      if (!failed) state.scheduleForm = null; // on failure keep your picks on screen
       await fetchAll();
+      state.toast = failed
+        ? { title: "SAVE FAILED", subtitle: failed.error.message || "Could not save the schedule" }
+        : { title: "SCHEDULE SAVED", subtitle: "Your training days are updated" };
+      render();
+      setTimeout(() => { state.toast = null; render(); }, failed ? 5000 : 2200);
     }
 
     async function logWeight() {
@@ -880,6 +900,7 @@
           <p class="text-cyan text-[11px] tracking-[0.35em] font-body">CONFIGURATION</p>
           <h1 class="font-display text-2xl mt-1">Weekly Schedule</h1>
           <p class="text-ink-dim text-sm font-body mt-1">Choose your training days. Everything else becomes a Recovery Zone.</p>
+          ${state.schedule.length === 0 ? `<p class="text-gold text-xs font-body mt-2">No schedule saved yet. Pick your days, then tap SAVE SCHEDULE.</p>` : ""}
         </header>
         <div class="panel px-4 py-4">
           <ul class="divide-y divide-line">
